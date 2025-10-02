@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 export async function GET() {
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -39,18 +39,13 @@ export async function POST(req: Request) {
   const { data: existing } = await supabase.from('oauth_tokens').select('org_id').eq('org_id', profile.org_id).maybeSingle()
 
   if (!existing) {
-    if (!body.refresh_token) {
-      return NextResponse.json(
-        { ok: false, error: 'refresh_token required to create new oauth token row' },
-        { status: 400 }
-      )
-    }
     const { error: insErr } = await supabase.from('oauth_tokens').insert({
       org_id: profile.org_id,
       provider: 'zoho',
       client_id: body.client_id || '',
       client_secret: body.client_secret || '',
-      refresh_token: body.refresh_token,
+      // placeholder when not provided; webhook will fill real token
+      refresh_token: body.refresh_token ?? '',
     })
     if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
   } else {
@@ -70,4 +65,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true })
 }
-

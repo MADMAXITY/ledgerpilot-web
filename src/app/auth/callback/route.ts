@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const code = url.searchParams.get('code')
   if (code) {
-    const supabase = await createSupabaseServerClient()
+    const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
     // Exchange the code and set auth cookies. Different lib versions support
     // different overloads; attempt both without failing the request.
     type AuthLike = { exchangeCodeForSession: (input: string) => Promise<unknown> }

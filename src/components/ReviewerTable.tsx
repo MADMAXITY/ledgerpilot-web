@@ -38,8 +38,22 @@ function mapUnknownToListItem(r: UnknownRecord): IngestionListItem {
 
 // computeUiState used server-side now; kept for completeness in fallback cases
 
-export default function ReviewerTable({ onOpen }: { onOpen?: (id: number | string) => void }) {
-  const [state, setState] = useState<UiIngestionState | 'All'>('All')
+export default function ReviewerTable({
+  onOpen,
+  filterState,
+  onFilterStateChange,
+}: {
+  onOpen?: (id: number | string) => void
+  filterState?: UiIngestionState | 'All'
+  onFilterStateChange?: (s: UiIngestionState | 'All') => void
+}) {
+  const controlled = typeof filterState !== 'undefined'
+  const [localState, setLocalState] = useState<UiIngestionState | 'All'>(filterState ?? 'All')
+  const state = controlled ? (filterState as UiIngestionState | 'All') : localState
+  const setState = (v: UiIngestionState | 'All') => {
+    if (controlled) onFilterStateChange?.(v)
+    else setLocalState(v)
+  }
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: '1', page_size: '50' })
     if (state !== 'All') params.set('state', state)

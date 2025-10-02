@@ -6,7 +6,7 @@ type Ctx = { params: Promise<{ id: string }> }
 export async function GET(_req: NextRequest, ctx: Ctx) {
   const { id: idStr } = await ctx.params
   const id = Number(idStr)
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
 
   const { data: ing, error } = await supabase
     .from('ingestions')

@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
 
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
   let query = supabase
     .from('ingestions')
     .select(

@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   const org_id = (body?.org_id as string | undefined)?.trim()
   if (!org_id) return NextResponse.json({ ok: false, error: 'org_id required' }, { status: 400 })
 
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -22,4 +22,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, org_id })
 }
-
