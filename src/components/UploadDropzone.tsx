@@ -84,7 +84,7 @@ export default function UploadDropzone({ onCompleted }: { onCompleted?: () => vo
   return (
     <Paper
       variant="outlined"
-      sx={{ p: 3, borderStyle: 'dashed', borderColor: 'divider' }}
+      sx={{ p: 3, borderStyle: 'dashed', borderColor: 'divider', maxWidth: 720, mx: 'auto' }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault()
@@ -107,7 +107,7 @@ export default function UploadDropzone({ onCompleted }: { onCompleted?: () => vo
             <ToggleButton value="auto">Auto</ToggleButton>
           </ToggleButtonGroup>
         </Stack>
-        <CloudUploadIcon sx={{ fontSize: 42, color: 'primary.main' }} />
+        <CloudUploadIcon sx={{ fontSize: 36, color: 'primary.main' }} />
         <Typography variant="h6">Upload invoice</Typography>
         <Typography variant="body2" color="text.secondary">
           Drag and drop a file here, or click to browse

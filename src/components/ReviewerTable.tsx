@@ -1,11 +1,11 @@
 "use client"
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { Box, Chip, FormControl, InputLabel, MenuItem, Select, Stack } from '@mui/material'
+import { Box, Chip, FormControl, InputLabel, MenuItem, Select, Stack, Button, Typography, ToggleButtonGroup, ToggleButton, Tooltip } from '@mui/material'
 import { DataGrid, GridColDef } from '@mui/x-data-grid'
 //
 import type { IngestionListItem, UiIngestionState } from '@/types/contracts'
-import StateChip from './StateChip'
+// import StateChip from './StateChip'
 
 async function listFetcher(url: string): Promise<IngestionListItem[]> {
   // fetch from our Next API (Supabase-backed)
@@ -42,10 +42,12 @@ export default function ReviewerTable({
   onOpen,
   filterState,
   onFilterStateChange,
+  activeId,
 }: {
   onOpen?: (id: number | string) => void
   filterState?: UiIngestionState | 'All'
   onFilterStateChange?: (s: UiIngestionState | 'All') => void
+  activeId?: number | string | null
 }) {
   const controlled = typeof filterState !== 'undefined'
   const [localState, setLocalState] = useState<UiIngestionState | 'All'>(filterState ?? 'All')
@@ -61,6 +63,15 @@ export default function ReviewerTable({
   }, [state])
 
   const { data, isLoading } = useSWR<IngestionListItem[]>(query, listFetcher)
+  const [activeIndex, setActiveIndex] = useState<number>(-1)
+  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+
+  // Keep active index in sync with activeId when provided
+  useEffect(() => {
+    if (!activeId || !data) return
+    const idx = data.findIndex((r) => String(r.id) === String(activeId))
+    if (idx >= 0) setActiveIndex(idx)
+  }, [activeId, data])
 
   const columns: GridColDef[] = [
     {
@@ -73,9 +84,18 @@ export default function ReviewerTable({
       },
       sortable: true,
     },
-    { field: 'vendor_guess', headerName: 'Vendor', flex: 1 },
+    {
+      field: 'vendor_guess',
+      headerName: 'Vendor',
+      flex: 1,
+      renderCell: (p) => (
+        <Tooltip title={p.value || ''}>
+          <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.value}</Box>
+        </Tooltip>
+      ),
+    },
     { field: 'bill_number', headerName: 'Bill #', width: 160 },
-    { field: 'total_guess', headerName: 'Total', width: 120 },
+    { field: 'total_guess', headerName: 'Total', width: 120, headerAlign: 'right', align: 'right' },
     {
       field: 'ingestion_status',
       headerName: 'Ingestion',
@@ -130,6 +150,37 @@ export default function ReviewerTable({
     // Action column removed; row click opens slide-in
   ]
 
+  // Keyboard navigation: J/K
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      if (!data || data.length === 0) return
+      if (key === 'j') {
+        const next = activeIndex < 0 ? 0 : Math.min(activeIndex + 1, data.length - 1)
+        setActiveIndex(next)
+        onOpen?.(data[next].id)
+      } else if (key === 'k') {
+        const prev = activeIndex < 0 ? 0 : Math.max(activeIndex - 1, 0)
+        setActiveIndex(prev)
+        onOpen?.(data[prev].id)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [activeIndex, data, onOpen])
+
+  // Empty overlay
+  const NoRows = () => (
+    <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }} spacing={1}>
+      <Typography variant="body2" color="text.secondary">
+        {state === 'Ready' ? 'Nothing to approve' : 'No rows'}
+      </Typography>
+      <Button size="small" variant="outlined" href="/">
+        Upload
+      </Button>
+    </Stack>
+  )
+
   return (
     <Stack spacing={2}>
       <FormControl size="small" sx={{ width: 220 }}>
@@ -148,23 +199,51 @@ export default function ReviewerTable({
           ))}
         </Select>
       </FormControl>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Typography variant="caption" color="text.secondary">Density:</Typography>
+        <ToggleButtonGroup size="small" exclusive value={density} onChange={(_e, v) => v && setDensity(v)}>
+          <ToggleButton value="comfortable">Comfortable</ToggleButton>
+          <ToggleButton value="compact">Compact</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
       <Box sx={{ height: 560, width: '100%' }}>
         <DataGrid
           rows={data || []}
           loading={isLoading}
-          density="comfortable"
+          density={density}
           rowHeight={52}
           columns={columns}
           pageSizeOptions={[25, 50]}
           pagination
           disableRowSelectionOnClick
           getRowId={(r) => r.id}
-          onRowClick={(p) => onOpen?.(p.id)}
+          onRowClick={(p) => {
+            onOpen?.(p.id)
+            if (data) {
+              const idx = data.findIndex((r) => String(r.id) === String(p.id))
+              if (idx >= 0) setActiveIndex(idx)
+            }
+          }}
           sx={{
             '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': { outline: 'none' },
             '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': { outline: 'none' },
-            '& .MuiDataGrid-row:hover': { backgroundColor: 'rgba(148, 163, 184, 0.06)' },
+            // Stronger hover affordance and pointer
+            '& .MuiDataGrid-row': {
+              cursor: 'pointer',
+              transition: 'background-color 120ms ease, box-shadow 120ms ease',
+            },
+            '& .MuiDataGrid-row:hover': {
+              backgroundColor: 'rgba(99, 102, 241, 0.08)',
+              boxShadow: 'inset 0 0 0 1px rgba(99,102,241,0.24)',
+            },
+            '& .MuiDataGrid-row:hover .MuiDataGrid-cell': {
+              backgroundColor: 'transparent',
+            },
+            '& .MuiDataGrid-virtualScrollerRenderZone .MuiDataGrid-row:nth-of-type(odd)': {
+              backgroundColor: 'rgba(255,255,255,0.02)',
+            },
           }}
+          slots={{ noRowsOverlay: NoRows }}
         />
       </Box>
     </Stack>

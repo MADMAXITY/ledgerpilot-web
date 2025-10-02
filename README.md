@@ -5,7 +5,6 @@ Quick start
 - Copy .env.example to .env.local and set values:
   - NEXT_PUBLIC_SUPABASE_URL
   - NEXT_PUBLIC_SUPABASE_ANON_KEY
-  - NEXT_PUBLIC_APP_URL (e.g., http://localhost:3000)
   - NEXT_PUBLIC_API_BASE_URL (your n8n/dev API)
 - Install deps: npm i
 - Run: npm run dev

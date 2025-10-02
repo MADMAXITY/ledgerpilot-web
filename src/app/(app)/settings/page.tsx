@@ -85,7 +85,18 @@ export default function SettingsPage() {
           <TextField label="Email" value={email} InputProps={{ readOnly: true }} />
           <TextField label="Organization ID" value={org} onChange={(e) => setOrg(e.target.value)} helperText="Set the org this user belongs to" />
           <Box>
-            <Button variant="contained" onClick={onSave} disabled={loading}>
+            <Button
+              variant="contained"
+              onClick={onSave}
+              disabled={loading}
+              sx={{
+                background: 'rgba(99,102,241,.18)',
+                color: 'primary.light',
+                border: '1px solid rgba(99,102,241,.36)',
+                boxShadow: 'none',
+                '&:hover': { background: 'rgba(99,102,241,.24)', boxShadow: 'none', borderColor: 'rgba(99,102,241,.48)' },
+              }}
+            >
               Save Changes
             </Button>
           </Box>

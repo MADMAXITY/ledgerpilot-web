@@ -1,18 +1,32 @@
 "use client"
 
-import { useEffect, useState } from 'react'
-import { Box, Chip, CircularProgress, Divider, Drawer, IconButton, List, ListItem, ListItemText, Stack, Typography, Paper, Button } from '@mui/material'
+import { useEffect, useState, useCallback } from 'react'
+import { Box, Chip, Divider, Drawer, IconButton, Stack, Typography, Paper, Skeleton, Link as MuiLink } from '@mui/material'
 import BillViewerDrawer from './BillViewerDrawer'
 import CloseIcon from '@mui/icons-material/Close'
 import { useSnackbar } from 'notistack'
 import { apiFetch } from '@/lib/api'
+import ReviewHeader from './ReviewHeader'
+import RejectDialog from './RejectDialog'
+import LineItems from './LineItems'
+import LineItemsMinimal from './LineItemsMinimal'
 
 type Detail = {
   ok: boolean
-  ingestion: { ingestion_id: number; created_at: string; status?: string; approval_mode?: string; approval_status?: string }
+  ingestion: { ingestion_id: number; created_at: string; status?: string; approval_mode?: string; approval_status?: string; error?: unknown }
   storage_key: string | null
   invoice: { invoice_id: number; vendor_name: string; bill_number: string; bill_date: string; grand_total: number; currency: string } | null
-  lines: Array<{ line_id: number; line_no: number; description: string | null; amount: number | null; item_name: string | null; match_state: string }>
+  lines: Array<{
+    line_id: number
+    line_no: number
+    description: string | null
+    quantity: number | null
+    rate: number | null
+    amount: number | null
+    item_name: string | null
+    match_state: string
+    item_id?: string | null
+  }>
   counts: { to_create: number; unmatched: number }
   draft: {
     date: string | null
@@ -30,6 +44,7 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
   const [data, setData] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [rejectOpen, setRejectOpen] = useState(false)
   const { enqueueSnackbar } = useSnackbar()
 
   const reload = async (ingId: number | string) => {
@@ -50,9 +65,38 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
     load()
   }, [open, id])
 
-  const canApprove = !!(
-    data?.ingestion && data.ingestion.approval_mode === 'manual' && data.ingestion.approval_status === 'ready'
-  )
+  const canApprove = !!(data?.ingestion && data.ingestion.approval_mode === 'manual' && data.ingestion.approval_status === 'ready')
+
+  const handleApprove = useCallback(async () => {
+    if (!data?.ingestion) return
+    try {
+      await apiFetch(`/approvals/${data.ingestion.ingestion_id}/approve`, { method: 'POST' })
+      enqueueSnackbar('Approved', { variant: 'success' })
+      await reload(data.ingestion.ingestion_id)
+    } catch (e: unknown) {
+      enqueueSnackbar(e instanceof Error ? e.message : 'Approve failed', { variant: 'error' })
+    }
+  }, [data?.ingestion, enqueueSnackbar])
+
+  // Keyboard shortcuts when drawer is open
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      if (key === 'a' && canApprove) {
+        e.preventDefault()
+        void handleApprove()
+      } else if (key === 'r' && canApprove) {
+        e.preventDefault()
+        setRejectOpen(true)
+      } else if (key === 'v' && data?.storage_key) {
+        e.preventDefault()
+        setShowPreview((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, canApprove, data?.storage_key, handleApprove])
 
   return (
     <>
@@ -64,65 +108,48 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
       >
         <Box sx={{ p: 2 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-            <Stack direction="row" spacing={0.75} alignItems="center">
-              {data?.ingestion ? (
-                <Stack direction="row" spacing={1}>
-                  <Chip size="small" label={`status: ${data.ingestion.status ?? ''}`} />
-                  <Chip size="small" color="info" label={`mode: ${data.ingestion.approval_mode ?? ''}`} />
-                  <Chip size="small" color="warning" label={`approval: ${data.ingestion.approval_status ?? ''}`} />
-                </Stack>
-              ) : null}
-            </Stack>
+            <Box />
             <IconButton onClick={onClose}>
               <CloseIcon />
             </IconButton>
           </Stack>
-          <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-            {data?.storage_key ? (
-              <Chip label={showPreview ? 'Hide uploaded bill' : 'View uploaded bill'} color={showPreview ? 'secondary' : 'default'} onClick={() => setShowPreview((v) => !v)} />
-            ) : null}
-            {canApprove && data?.ingestion ? (
-              <Stack direction="row" spacing={1}>
-                <Button size="small" variant="contained" onClick={async () => {
-                  try {
-                    await apiFetch(`/approvals/${data.ingestion.ingestion_id}/approve`, { method: 'POST' })
-                    enqueueSnackbar('Approved', { variant: 'success' })
-                    await reload(data.ingestion.ingestion_id)
-                  } catch (e: unknown) {
-                    enqueueSnackbar(e instanceof Error ? e.message : 'Approve failed', { variant: 'error' })
-                  }
-                }}>Approve</Button>
-                <Button size="small" color="error" variant="outlined" onClick={async () => {
-                  const reason = window.prompt('Reason for rejection?') || ''
-                  try {
-                    await apiFetch(`/approvals/${data.ingestion.ingestion_id}/reject`, { method: 'POST', body: { reason } })
-                    enqueueSnackbar('Rejected', { variant: 'success' })
-                    await reload(data.ingestion.ingestion_id)
-                  } catch (e: unknown) {
-                    enqueueSnackbar(e instanceof Error ? e.message : 'Reject failed', { variant: 'error' })
-                  }
-                }}>Reject</Button>
-              </Stack>
-            ) : null}
-          </Stack>
+          {data?.ingestion ? (
+            <ReviewHeader
+              vendor={data?.invoice?.vendor_name || data?.draft?.vendor_name || '—'}
+              billNo={data?.invoice?.bill_number || data?.draft?.bill_number || '—'}
+              billDate={data?.invoice?.bill_date || data?.draft?.date || '—'}
+              status={(data.ingestion.approval_status === 'ready' && data.draft ? 'ready' : (data.ingestion.status || 'queued')) as 'billed' | 'failed' | 'ready' | 'posting' | 'matched' | 'queued' | 'extracting'}
+              mode={(data.ingestion.approval_mode || 'manual') as 'manual' | 'auto'}
+              canAct={canApprove}
+              onApprove={handleApprove}
+              onReject={() => setRejectOpen(true)}
+              onView={() => setShowPreview((v) => !v)}
+            />
+          ) : null}
+
           {loading ? (
-            <Stack alignItems="center" sx={{ py: 8 }}>
-              <CircularProgress />
+            <Stack spacing={2} sx={{ py: 2 }}>
+              <Skeleton variant="rounded" height={120} />
+              <Skeleton variant="rounded" height={36} />
+              <Skeleton variant="rounded" height={200} />
             </Stack>
           ) : data ? (
-            <Stack spacing={2}>
+            <Stack spacing={2} sx={{ mt: 2 }}>
               {data.invoice ? (
-                <Box>
-                  <Typography variant="subtitle1" sx={{ mb: 0.5 }}>
-                    {data.invoice.vendor_name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {data.invoice.bill_number} · {new Date(data.invoice.bill_date).toLocaleDateString()}
-                  </Typography>
-                  <Typography variant="h6" sx={{ mt: 1 }}>
-                    {data.invoice.grand_total} {data.invoice.currency || ''}
-                  </Typography>
-                </Box>
+                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle2">Invoice summary</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Vendor: {data.invoice.vendor_name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Bill: {data.invoice.bill_number} • {new Date(data.invoice.bill_date).toLocaleDateString()}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Total: {data.invoice.currency} {data.invoice.grand_total?.toLocaleString()}
+                    </Typography>
+                  </Stack>
+                </Paper>
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   No invoice data yet.
@@ -134,76 +161,95 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
               </Stack>
               <Divider />
               <Typography variant="subtitle2">Lines</Typography>
-              <List dense>
-                {(data.lines || []).map((l, idx) => (
-                  <ListItem key={l.line_id} disableGutters>
-                    <ListItemText
-                      primary={
-                        <Stack direction="row" spacing={0.5} alignItems="center">
-                          <Typography variant="body2" sx={{ minWidth: 18 }}>{idx + 1}.</Typography>
-                          <Typography variant="body2">{l.item_name || l.description || '—'}</Typography>
-                          <Chip size="small" label={l.match_state} color={l.match_state === 'to_create' ? 'warning' : l.match_state === 'unmatched' ? 'default' : 'success'} />
-                        </Stack>
-                      }
-                      secondary={l.amount != null ? `Amount: ${l.amount}` : undefined}
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              <LineItemsMinimal
+                items={(data.lines || []).map((l) => ({ name: l.item_name || l.description || '—', match_state: l.match_state }))}
+              />
               {data.draft ? (
                 <>
                   <Divider />
                   <Typography variant="subtitle2">Draft</Typography>
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Stack spacing={1}>
+                    <Stack spacing={1.2}>
                       <Typography variant="body2" color="text.secondary">
                         Vendor: {data.draft.vendor_name || data.draft.vendor_id || '—'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Bill: {data.draft.bill_number || '—'} · {data.draft.date ? new Date(data.draft.date).toLocaleDateString() : '—'}
+                        Bill: {data.draft.bill_number || '—'} • {data.draft.date ? new Date(data.draft.date).toLocaleDateString() : '—'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         Due: {data.draft.due_date ? new Date(data.draft.due_date).toLocaleDateString() : '—'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Discount type: {data.draft.discount_type || '—'} · Item-level tax: {data.draft.is_item_level_tax_calc ? 'Yes' : 'No'}
+                        Discount type: {data.draft.discount_type || '—'} • Item-level tax: {data.draft.is_item_level_tax_calc ? 'Yes' : 'No'}
                       </Typography>
                       <Divider />
                       <Typography variant="body2">Draft line items</Typography>
-                      <List dense>
-                        {(data.draft.line_items || []).map((li, idx) => (
-                          <ListItem key={`${li.item_id || 'x'}-${idx}`} disableGutters>
-                            <ListItemText
-                              primary={
-                                <Stack direction="row" spacing={0.5} alignItems="center">
-                                  <Typography variant="body2" sx={{ minWidth: 18 }}>{idx + 1}.</Typography>
-                                  <Typography variant="body2">{li.item_name || li.description || '—'}</Typography>
-                                </Stack>
-                              }
-                              secondary={
-                                <>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Qty: {li.quantity ?? 1} · Rate: {li.rate ?? '—'}{li.discount != null ? ` · Discount: ${li.discount}` : ''}
-                                  </Typography>
-                                  {li.hsn_or_sac ? (
-                                    <Typography variant="caption" color="text.secondary"> · HSN/SAC: {li.hsn_or_sac}</Typography>
-                                  ) : null}
-                                </>
-                              }
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
+                      <LineItems
+                        items={(data.draft.line_items || []).map((li) => ({
+                          name: li.item_name || li.description || '—',
+                          qty: li.quantity ?? undefined,
+                          rate: li.rate ?? undefined,
+                          discount: li.discount ?? undefined,
+                          hsn: li.hsn_or_sac ?? null,
+                        }))}
+                      />
                     </Stack>
                   </Paper>
                 </>
+              ) : null}
+
+              {data?.ingestion?.status === 'failed' && data?.ingestion?.error ? (
+                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Error
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                    {(() => {
+                      const err = data?.ingestion?.error as unknown
+                      if (typeof err === 'string') return err.length > 280 ? err.slice(0, 280) + '…' : err
+                      try {
+                        const s = JSON.stringify(err)
+                        return s.length > 280 ? s.slice(0, 280) + '…' : s
+                      } catch { return '—' }
+                    })()}
+                  </Typography>
+                  {(() => {
+                    const err = data?.ingestion?.error as unknown
+                    if (err && typeof err === 'object') {
+                      const rec = err as Record<string, unknown>
+                      const url = (rec['execution_url'] || rec['executionUrl']) as string | undefined
+                      return url ? (
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          <MuiLink href={url} target="_blank" rel="noreferrer">
+                            View logs
+                          </MuiLink>
+                        </Typography>
+                      ) : null
+                    }
+                    return null
+                  })()}
+                </Paper>
               ) : null}
             </Stack>
           ) : null}
         </Box>
       </Drawer>
       <BillViewerDrawer storageKey={data?.storage_key ?? null} open={showPreview} onClose={() => setShowPreview(false)} />
+      <RejectDialog
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        onConfirm={async (reason) => {
+          setRejectOpen(false)
+          if (!data?.ingestion) return
+          try {
+            await apiFetch(`/approvals/${data.ingestion.ingestion_id}/reject`, { method: 'POST', body: { reason } })
+            enqueueSnackbar(`Rejected${reason ? ` (${reason})` : ''}`, { variant: 'success' })
+            await reload(data.ingestion.ingestion_id)
+          } catch (e: unknown) {
+            enqueueSnackbar(e instanceof Error ? e.message : 'Reject failed', { variant: 'error' })
+          }
+        }}
+      />
     </>
   )
 }
-

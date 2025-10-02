@@ -28,7 +28,6 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 # Auth (Next.js App URLs)
-NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Backend (n8n)
 NEXT_PUBLIC_API_BASE_URL=https://api.ledgerpilot.example.com   # do not hardcode; always read from env
@@ -83,7 +82,7 @@ export default function Login() {
       variant="contained"
       onClick={() =>
         supabase.auth.signInWithOAuth({ provider: 'google', options: {
-          redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         }})
       }
     >

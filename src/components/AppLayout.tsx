@@ -17,6 +17,7 @@ import {
   MenuItem,
   Toolbar,
 } from '@mui/material'
+import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import MenuIcon from '@mui/icons-material/Menu'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
@@ -41,6 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleDrawerToggle = () => setMobileOpen((prev) => !prev)
   const open = Boolean(anchorEl)
+  const pathname = usePathname()
 
   const drawer = (
     <div>
@@ -50,9 +52,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </Box>
       </Toolbar>
       <Divider />
-      <List>
+      <List sx={{ px: 1 }}>
         <ListItem disablePadding>
-          <ListItemButton component={Link} href="/">
+          <ListItemButton
+            component={Link}
+            href="/"
+            selected={pathname === '/'}
+            sx={{
+              borderRadius: 1.25,
+              mx: 1,
+              '&.Mui-selected': { background: 'rgba(99,102,241,.10)' },
+            }}
+          >
             <ListItemIcon>
               <CloudUploadIcon />
             </ListItemIcon>
@@ -60,7 +71,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding>
-          <ListItemButton component={Link} href="/queue">
+          <ListItemButton
+            component={Link}
+            href="/queue"
+            selected={pathname === '/queue'}
+            sx={{
+              borderRadius: 1.25,
+              mx: 1,
+              '&.Mui-selected': { background: 'rgba(99,102,241,.10)' },
+            }}
+          >
             <ListItemIcon>
               <QueueIcon />
             </ListItemIcon>
@@ -68,7 +88,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding>
-          <ListItemButton component={Link} href="/settings">
+          <ListItemButton
+            component={Link}
+            href="/settings"
+            selected={pathname === '/settings'}
+            sx={{
+              borderRadius: 1.25,
+              mx: 1,
+              '&.Mui-selected': { background: 'rgba(99,102,241,.10)' },
+            }}
+          >
             <ListItemIcon>
               <SettingsIcon />
             </ListItemIcon>
@@ -122,7 +151,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              boxShadow: 'inset -1px 0 0 rgba(255,255,255,.06)',
+            },
           }}
         >
           {drawer}
@@ -131,15 +164,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              boxShadow: 'inset -1px 0 0 rgba(255,255,255,.06)',
+            },
           }}
           open
         >
-          {drawer}
+          <Box sx={{ height: '100%' }}>
+            {drawer}
+          </Box>
         </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}>
+      <Box component="main" sx={{ flexGrow: 1, p: { xs: 3, md: 4 }, width: { sm: `calc(100% - ${drawerWidth}px)` }, background: 'transparent' }}>
         <Toolbar />
         {children}
       </Box>

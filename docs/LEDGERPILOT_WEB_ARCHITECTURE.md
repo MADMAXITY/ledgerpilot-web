@@ -23,11 +23,10 @@ Populate `.env.local` from `.env.example`:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`)
 - `NEXT_PUBLIC_API_BASE_URL` (n8n / backend base URL)
 - Optional: `NEXT_PUBLIC_SENTRY_DSN`
 
-All backend calls use `NEXT_PUBLIC_API_BASE_URL` (never hardcoded).
+All backend calls use `NEXT_PUBLIC_API_BASE_URL` (never hardcoded). Auth redirect uses `window.location.origin` at runtime; no app URL env is required.
 
 ## 3) Routing and Layout
 
@@ -192,3 +191,30 @@ Highlights:
 
 This document will evolve alongside contracts in `docs/codex-high-context.md` and the DB schema in `docs/dbschema.sql`.
 
+
+## 16) Follow-up Change Log (UI polish & infra)
+
+This pass focused on production-level polish, UX affordances, and hydration stability.
+
+- Background and surfaces
+  - Single root gradient and optional grain overlay to eliminate banding/seams.
+  - Unify Paper/Card/Drawer on the same paper surface color with subtle 1px borders.
+
+- MUI + Next 15 integration
+  - Added `@mui/material-nextjs` App Router cache provider in `src/app/providers.tsx` to stabilize Emotion SSR and avoid hydration mismatches.
+
+- Review page
+  - MetricsBar: hover lift + border tint; cards clickable to filter; hides Failed when 0; skeletons while loading.
+  - Table: pointer cursor on rows, stronger hover tint with 1px inset border; density toggle (comfortable/compact); zebra striping; vendor tooltip + truncation; totals right-aligned with tabular numerals.
+  - Drawer: compact Lines (only product name + match status) for clean scanning; soft Approve/Reject styles with a divider; keyboard shortcuts A/R/V and J/K supported.
+
+- Login & favicon
+  - New login landing with product logo, feature bullets, trust chips, and a sign-in card.
+  - Favicon switched to `public/favicon.png` via explicit link tags and metadata.
+
+- Upload & Settings
+  - Upload page heading removed; only the upload card is shown; card centered with a constrained max width.
+  - Settings "Save Changes" button softened (no heavy shadow; subtle border/tint).
+
+- Environment simplification
+  - Removed `NEXT_PUBLIC_APP_URL`; OAuth redirect now uses `window.location.origin` at runtime. Ensure all callback origins are added to Supabase Auth.

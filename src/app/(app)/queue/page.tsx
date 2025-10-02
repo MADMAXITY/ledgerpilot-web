@@ -17,7 +17,7 @@ export default function QueuePage() {
       <Stack spacing={2} sx={{ mb: 2 }}>
         <MetricsBar onSelectState={(s) => setFilterState(s)} />
       </Stack>
-      <ReviewerTable onOpen={(id) => setOpenId(id)} filterState={filterState} onFilterStateChange={setFilterState} />
+      <ReviewerTable onOpen={(id) => setOpenId(id)} filterState={filterState} onFilterStateChange={setFilterState} activeId={openId} />
       <IngestionDrawer id={openId} open={openId != null} onClose={() => setOpenId(null)} />
     </Container>
   )
