@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     line_items?: Array<Record<string, unknown>>
   } | null
   const idx = Math.max(0, (line.line_no || 1) - 1)
-  let updatedDraft = draft || { line_items: [] }
+  const updatedDraft = draft || { line_items: [] }
   const arr = Array.isArray(updatedDraft.line_items) ? updatedDraft.line_items : []
   // ensure array length
   while (arr.length <= idx) arr.push({})
@@ -82,4 +82,3 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
   return NextResponse.json({ ok: true, counts })
 }
-

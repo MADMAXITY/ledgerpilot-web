@@ -1,8 +1,9 @@
 "use client"
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Box, Card, CardContent, Chip, Menu, MenuItem, Stack, Typography, Button } from '@mui/material'
 import StatusChip from './StatusChip'
 import CatalogSearchDialog from './CatalogSearchDialog'
+import type { StatusChipType } from './StatusChip'
 
 type Line = {
   line_id: number
@@ -82,6 +83,22 @@ export default function LineItemsInteractive({
     setCatalogOpen(false)
   }
 
+  const toStatusChipType = (s: string): StatusChipType => {
+    switch (s) {
+      case 'billed':
+      case 'failed':
+      case 'ready':
+      case 'auto_matched':
+      case 'human_matched':
+      case 'created':
+      case 'unmatched':
+      case 'to_create':
+        return s
+      default:
+        return 'unmatched'
+    }
+  }
+
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
       {lines.map((l) => {
@@ -98,7 +115,7 @@ export default function LineItemsInteractive({
                 </Typography>
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }} alignItems="center">
-                <StatusChip type={(l.match_state as any) || 'unmatched'} size="small" />
+                <StatusChip type={toStatusChipType(l.match_state)} size="small" />
                 <Button size="small" variant="contained" onClick={(e) => onMatchClick(e.currentTarget, l)}>
                   {l.match_state === 'human_matched' ? 'Change match' : 'Match'}
                 </Button>
@@ -137,4 +154,3 @@ export default function LineItemsInteractive({
     </Box>
   )
 }
-

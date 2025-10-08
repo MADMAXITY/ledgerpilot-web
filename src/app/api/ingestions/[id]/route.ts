@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createSupabaseServerClient, createSupabaseAdminServerClient } from '@/lib/supabase-server'
+import { createSupabaseAdminServerClient } from '@/lib/supabase-server'
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -150,7 +150,7 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     .eq('ingestion_id', id)
     .maybeSingle()
   if (!existing) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
-  if (String((existing as any).status || '').toLowerCase() === 'billed') {
+  if (String(existing.status ?? '').toLowerCase() === 'billed') {
     return NextResponse.json({ ok: false, error: 'cannot delete billed ingestion' }, { status: 400 })
   }
   const { error } = await supabase.from('ingestions').delete().eq('ingestion_id', id)

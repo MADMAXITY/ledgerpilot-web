@@ -1,4 +1,4 @@
-import { Container, Typography, Box } from '@mui/material'
+import { Container, Box } from '@mui/material'
 import UploadDropzone from '@/components/UploadDropzone'
 
 export default function DashboardPage() {

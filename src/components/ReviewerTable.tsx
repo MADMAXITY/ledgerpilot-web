@@ -7,6 +7,7 @@ import DeleteRounded from '@mui/icons-material/DeleteRounded'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { useSnackbar } from 'notistack'
 import { DataGrid, GridColDef } from '@mui/x-data-grid'
+import type { GridRenderCellParams } from '@mui/x-data-grid'
 //
 import type { IngestionListItem, UiIngestionState } from '@/types/contracts'
 // import StateChip from './StateChip'
@@ -161,7 +162,7 @@ export default function ReviewerTable({
             width: 80,
             sortable: false,
             filterable: false,
-            renderCell: (p: any) => {
+            renderCell: (p: GridRenderCellParams) => {
               const row = p.row as IngestionListItem & { ingestion_status?: string }
               const status = String(row.ingestion_status || '').toLowerCase()
               const canDelete = status !== 'billed'
@@ -269,8 +270,9 @@ export default function ReviewerTable({
             setPendingDelete(null)
             await mutate()
             try { (await import('swr')).mutate('/api/ingestions/metrics') } catch {}
-          } catch (e: any) {
-            enqueueSnackbar(e?.message || 'Delete failed', { variant: 'error' })
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Delete failed'
+            enqueueSnackbar(msg, { variant: 'error' })
           }
         }}
       />

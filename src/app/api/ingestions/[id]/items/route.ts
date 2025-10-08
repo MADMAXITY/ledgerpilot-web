@@ -35,6 +35,7 @@ export async function GET(req: Request, ctx: Ctx) {
 
   const { data, error } = await base
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-  const items = (data || []).map((d) => ({ item_id: d.item_id as string, name: (d as any).name as string | null, hsn8: ((d as any).hsn8 as string | null) || null }))
+  type ItemRow = { item_id: string; name: string | null; hsn8: string | null }
+  const items = ((data || []) as ItemRow[]).map((d) => ({ item_id: d.item_id, name: d.name ?? null, hsn8: d.hsn8 ?? null }))
   return NextResponse.json({ ok: true, items, count: items.length })
 }

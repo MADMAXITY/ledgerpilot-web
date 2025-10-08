@@ -83,6 +83,7 @@ export default function BillViewerDrawer({
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
               <Box sx={{ transform: `scale(${scale})`, transformOrigin: 'center', transition: 'transform 120ms ease' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={signedUrl} alt="Uploaded bill" style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
               </Box>
             </Box>

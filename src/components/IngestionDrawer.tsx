@@ -213,7 +213,7 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
                           rate: l.rate ?? null,
                         }))}
                         draftLines={(data.draft.line_items || []).map((li) => ({
-                          item_id: (li as any).item_id ?? null,
+                          item_id: li.item_id ?? null,
                           description: li.item_name || li.description || null,
                           quantity: li.quantity ?? null,
                           rate: li.rate ?? null,

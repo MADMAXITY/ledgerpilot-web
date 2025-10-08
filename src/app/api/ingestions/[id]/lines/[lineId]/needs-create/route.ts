@@ -47,7 +47,7 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
   const draft = (ing.bill_payload_draft as unknown) as { line_items?: Array<Record<string, unknown>> } | null
   const idx = Math.max(0, (line.line_no || 1) - 1)
-  let updatedDraft = draft || { line_items: [] }
+  const updatedDraft = draft || { line_items: [] }
   const arr = Array.isArray(updatedDraft.line_items) ? updatedDraft.line_items : []
   while (arr.length <= idx) arr.push({})
   const li = { ...(arr[idx] || {}) }
@@ -74,4 +74,3 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
   return NextResponse.json({ ok: true, counts })
 }
-

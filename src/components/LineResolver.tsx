@@ -19,7 +19,7 @@ type DraftLine = { item_id?: string | null; description?: string | null; quantit
 
 export default function LineResolver({
   ingestionId,
-  invoiceId,
+  invoiceId: _invoiceId,
   dbLines,
   draftLines,
   onChanged,
@@ -34,6 +34,8 @@ export default function LineResolver({
   canEdit?: boolean
   containerEl?: React.RefObject<HTMLElement | null>
 }) {
+  // intentionally keeping invoiceId in signature for future; mark as used
+  void _invoiceId
   const [activeLineId, setActiveLineId] = useState<number | null>(null)
   const [suggestions, setSuggestions] = useState<Array<{ item_id: string; name: string | null; hsn8: string | null; similarity?: number }>>([])
   const [loading, setLoading] = useState(false)
@@ -117,7 +119,24 @@ export default function LineResolver({
                 </Typography>
               </Stack>
               <Stack direction={{ xs: 'row' }} spacing={1} sx={{ mt: 1 }} alignItems="center">
-                <StatusChip type={(ms as any) || 'unmatched'} size="small" />
+                <StatusChip
+                  type={(() => {
+                    switch (ms) {
+                      case 'billed':
+                      case 'failed':
+                      case 'ready':
+                      case 'auto_matched':
+                      case 'human_matched':
+                      case 'created':
+                      case 'unmatched':
+                      case 'to_create':
+                        return ms
+                      default:
+                        return 'unmatched'
+                    }
+                  })()}
+                  size="small"
+                />
               </Stack>
               {canEdit ? (
                 <Stack direction={{ xs: 'row' }} spacing={1} sx={{ mt: 1 }} alignItems="center">
