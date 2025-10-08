@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Box, Chip, Divider, Drawer, IconButton, Stack, Typography, Paper, Skeleton, Link as MuiLink } from '@mui/material'
 import BillViewerDrawer from './BillViewerDrawer'
 import CloseIcon from '@mui/icons-material/Close'
@@ -8,8 +8,9 @@ import { useSnackbar } from 'notistack'
 import { apiFetch } from '@/lib/api'
 import ReviewHeader from './ReviewHeader'
 import RejectDialog from './RejectDialog'
-import LineItems from './LineItems'
-import LineItemsMinimal from './LineItemsMinimal'
+// Removed Lines section (redundant); only Draft shows line details
+import LineResolver from './LineResolver'
+// interactive line resolver is only shown in Draft section
 
 type Detail = {
   ok: boolean
@@ -66,12 +67,14 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
   }, [open, id])
 
   const canApprove = !!(data?.ingestion && data.ingestion.approval_mode === 'manual' && data.ingestion.approval_status === 'ready')
+  const canMarkReady = !!(data?.ingestion && data.ingestion.approval_status === 'pending' && (data?.counts?.unmatched === 0) && !!data?.draft)
 
   const handleApprove = useCallback(async () => {
     if (!data?.ingestion) return
     try {
       await apiFetch(`/approvals/${data.ingestion.ingestion_id}/approve`, { method: 'POST' })
       enqueueSnackbar('Approved', { variant: 'success' })
+      try { window.dispatchEvent(new Event('review:refresh')) } catch {}
       await reload(data.ingestion.ingestion_id)
     } catch (e: unknown) {
       enqueueSnackbar(e instanceof Error ? e.message : 'Approve failed', { variant: 'error' })
@@ -98,15 +101,18 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
     return () => window.removeEventListener('keydown', handler)
   }, [open, canApprove, data?.storage_key, handleApprove])
 
+  const contentRef = useRef<HTMLDivElement | null>(null)
+
   return (
     <>
       <Drawer
         anchor="right"
         open={open}
         onClose={onClose}
+        variant="persistent"
         PaperProps={{ sx: { width: { xs: '100%', md: 560 }, mt: { xs: '56px', sm: '64px' }, height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' } } }}
       >
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: 2 }} ref={contentRef}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
             <Box />
             <IconButton onClick={onClose}>
@@ -124,6 +130,17 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
               onApprove={handleApprove}
               onReject={() => setRejectOpen(true)}
               onView={() => setShowPreview((v) => !v)}
+              onMarkReady={canMarkReady ? async () => {
+                if (!data?.ingestion) return
+                try {
+                  await fetch(`/api/ingestions/${data.ingestion.ingestion_id}/ready`, { method: 'POST' })
+                  enqueueSnackbar('Marked as ready', { variant: 'success' })
+                  await reload(data.ingestion.ingestion_id)
+                  try { window.dispatchEvent(new Event('review:refresh')) } catch {}
+                } catch (e: unknown) {
+                  enqueueSnackbar(e instanceof Error ? e.message : 'Mark ready failed', { variant: 'error' })
+                }
+              } : null}
             />
           ) : null}
 
@@ -159,11 +176,7 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
                 {data.counts.to_create > 0 && <Chip color="warning" label={`New items: ${data.counts.to_create}`} />}
                 {data.counts.unmatched > 0 && <Chip color="info" label={`Unmatched: ${data.counts.unmatched}`} />}
               </Stack>
-              <Divider />
-              <Typography variant="subtitle2">Lines</Typography>
-              <LineItemsMinimal
-                items={(data.lines || []).map((l) => ({ name: l.item_name || l.description || '—', match_state: l.match_state }))}
-              />
+              
               {data.draft ? (
                 <>
                   <Divider />
@@ -183,15 +196,33 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
                         Discount type: {data.draft.discount_type || '—'} • Item-level tax: {data.draft.is_item_level_tax_calc ? 'Yes' : 'No'}
                       </Typography>
                       <Divider />
-                      <Typography variant="body2">Draft line items</Typography>
-                      <LineItems
-                        items={(data.draft.line_items || []).map((li) => ({
-                          name: li.item_name || li.description || '—',
-                          qty: li.quantity ?? undefined,
-                          rate: li.rate ?? undefined,
-                          discount: li.discount ?? undefined,
-                          hsn: li.hsn_or_sac ?? null,
+                      <Typography variant="body2">Resolve line items</Typography>
+                      <LineResolver
+                        ingestionId={data.ingestion.ingestion_id}
+                        invoiceId={data.invoice?.invoice_id ?? null}
+                        canEdit={String(data.ingestion.status || '').toLowerCase() !== 'billed'}
+                        containerEl={contentRef}
+                        dbLines={(data.lines || []).map((l) => ({
+                          line_id: l.line_id,
+                          line_no: l.line_no,
+                          match_state: l.match_state,
+                          item_id: l.item_id ?? null,
+                          item_name: l.item_name ?? null,
+                          description: l.description ?? null,
+                          quantity: l.quantity ?? null,
+                          rate: l.rate ?? null,
                         }))}
+                        draftLines={(data.draft.line_items || []).map((li) => ({
+                          item_id: (li as any).item_id ?? null,
+                          description: li.item_name || li.description || null,
+                          quantity: li.quantity ?? null,
+                          rate: li.rate ?? null,
+                          discount: li.discount ?? null,
+                          hsn_or_sac: li.hsn_or_sac ?? null,
+                        }))}
+                        onChanged={async () => {
+                          if (data?.ingestion?.ingestion_id) await reload(data.ingestion.ingestion_id)
+                        }}
                       />
                     </Stack>
                   </Paper>
@@ -245,6 +276,7 @@ export default function IngestionDrawer({ id, open, onClose }: { id: number | st
             await apiFetch(`/approvals/${data.ingestion.ingestion_id}/reject`, { method: 'POST', body: { reason } })
             enqueueSnackbar(`Rejected${reason ? ` (${reason})` : ''}`, { variant: 'success' })
             await reload(data.ingestion.ingestion_id)
+            try { window.dispatchEvent(new Event('review:refresh')) } catch {}
           } catch (e: unknown) {
             enqueueSnackbar(e instanceof Error ? e.message : 'Reject failed', { variant: 'error' })
           }

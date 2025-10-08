@@ -63,9 +63,11 @@ export default function Login() {
                   variant="contained"
                   onClick={() => {
                     const supabase = createSupabaseBrowserClient()
+                    const base = (process.env.NEXT_PUBLIC_AUTH_REDIRECT_BASE || (typeof window !== 'undefined' ? window.location.origin : ''))
+                      .replace(/\/$/, '')
                     return supabase.auth.signInWithOAuth({
                       provider: 'google',
-                      options: { redirectTo: `${window.location.origin}/auth/callback` },
+                      options: { redirectTo: `${base}/auth/callback` },
                     })
                   }}
                   sx={{ width: '100%' }}

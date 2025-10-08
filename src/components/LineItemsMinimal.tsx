@@ -39,4 +39,3 @@ export default function LineItemsMinimal({ items }: { items: Item[] }) {
     </Box>
   )
 }
-

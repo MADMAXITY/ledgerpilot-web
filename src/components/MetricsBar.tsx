@@ -9,6 +9,7 @@ type Metrics = {
   billed_total: number
   ready_count: number
   failed_count: number
+  needs_resolution?: number
 }
 
 function useMetrics() {
@@ -27,9 +28,10 @@ export default function MetricsBar({ onSelectState }: { onSelectState?: (s: UiIn
   const { data } = useMetrics()
   const { enqueueSnackbar } = useSnackbar()
 
-  const billedBig = data ? `${data.billed_30d} / ${data.billed_total}` : '—'
-  const readyBig = data ? `${data.ready_count}` : '—'
-  const failedBig = data ? `${data.failed_count}` : '—'
+  const billedBig = data ? `${data.billed_30d} / ${data.billed_total}` : '-'
+  const readyBig = data ? `${data.ready_count}` : '-'
+  const failedBig = data ? `${data.failed_count}` : '-'
+  const needsResBig = data ? `${data.needs_resolution ?? 0}` : '-'
 
   const MetricCard = ({ value, label, sub, onClick, hidden }: { value: number | string; label: string; sub?: string; onClick?: () => void; hidden?: boolean }) => {
     if (hidden) return null
@@ -87,6 +89,14 @@ export default function MetricsBar({ onSelectState }: { onSelectState?: (s: UiIn
               onClick={() => {
                 enqueueSnackbar('Filter: Billed', { variant: 'info' })
                 onSelectState?.('Billed')
+              }}
+            />
+            <MetricCard
+              value={needsResBig}
+              label="Items need resolution"
+              onClick={() => {
+                enqueueSnackbar('Filter: Items need resolution', { variant: 'info' })
+                onSelectState?.('Matched')
               }}
             />
             <MetricCard

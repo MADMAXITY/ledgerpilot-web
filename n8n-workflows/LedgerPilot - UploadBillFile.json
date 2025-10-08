@@ -1,0 +1,278 @@
+{
+  "name": "LedgerPilot - UploadBillFile",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -816,
+        -464
+      ],
+      "id": "7a02ac86-4af2-4087-84fd-a19678ddb8d0",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "bill_id"
+            },
+            {
+              "name": "access_token"
+            },
+            {
+              "name": "ingestion_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -912,
+        -192
+      ],
+      "id": "cd2a4bdb-3383-40cc-8659-f1d5ac539c64",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9c62423e-ffcc-4131-a3b7-d516d259d30a",
+              "name": "bill_id",
+              "value": "={{ $json.bill_id }}",
+              "type": "string"
+            },
+            {
+              "id": "35a44272-bdad-49ac-bce4-0a7b5a0106cc",
+              "name": "ingestion_id",
+              "value": "={{ $json.ingestion_id }}",
+              "type": "string"
+            },
+            {
+              "id": "57cbdf7d-2378-484d-8857-2e89aa893079",
+              "name": "access_token",
+              "value": "={{ $json.access_token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -688,
+        -192
+      ],
+      "id": "094469e7-e6ab-461c-9e0c-4ce27c7b1eaf",
+      "name": "set"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "files",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "file_id",
+              "keyValue": "={{ $json.file_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -192
+      ],
+      "id": "ad3e40c3-b17c-4640-82fc-1a37943cafc4",
+      "name": "get file id",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "keyValue": "={{ $json.ingestion_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        -192
+      ],
+      "id": "cb96b6dd-ee12-4382-9eea-1747664e49b2",
+      "name": "get ingestion",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://fdwerzjeipmpbgzcjdit.supabase.co/storage/v1/object/{{ $json.storage_key }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -16,
+        -192
+      ],
+      "id": "ea19e05a-a6a4-47d8-8018-8c5ae05529ee",
+      "name": "get file",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.zohoapis.in/books/v3/bills/{{ $('set').item.json.bill_id }}/attachment",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "organization_id",
+              "value": "={{ $('get ingestion').item.json.org_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('set').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "attachment",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e45f7190-5a21-4e1d-9619-4126429dbd23",
+      "name": "add file to bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        -192
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "set": {
+      "main": [
+        [
+          {
+            "node": "get ingestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get ingestion": {
+      "main": [
+        [
+          {
+            "node": "get file id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get file id": {
+      "main": [
+        [
+          {
+            "node": "get file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get file": {
+      "main": [
+        [
+          {
+            "node": "add file to bill",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3e09b58e-762c-4f43-8750-699d4e5ac383",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6879c4d326ba21d1ccb65b8539bd2e9444dca559b9181b34dd45567cb223f8c9"
+  },
+  "id": "QZgSqPowGfEznOYs",
+  "tags": []
+}

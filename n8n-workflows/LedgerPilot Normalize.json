@@ -1,0 +1,306 @@
+{
+  "name": "LedgerPilot Normalize",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "invoices_raw",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "raw_id",
+              "keyValue": "={{ $json.raw_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        144
+      ],
+      "id": "7cebfa56-ebad-438d-81b1-eff01a2a8e1d",
+      "name": "Get Raw Invoice",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "invoices",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "org_id",
+              "fieldValue": "={{ $json.org_id }}"
+            },
+            {
+              "fieldId": "ingestion_id",
+              "fieldValue": "={{ $json.ingestion_id }}"
+            },
+            {
+              "fieldId": "vendor_name",
+              "fieldValue": "={{ $json.payload.vendor.name }}"
+            },
+            {
+              "fieldId": "vendor_gstin",
+              "fieldValue": "={{ $json.payload.vendor.gstin }}"
+            },
+            {
+              "fieldId": "bill_number",
+              "fieldValue": "={{ $json.payload.invoice.bill_number }}"
+            },
+            {
+              "fieldId": "bill_date",
+              "fieldValue": "={{ $json.payload.invoice.bill_date }}"
+            },
+            {
+              "fieldId": "due_date",
+              "fieldValue": "={{\n  (() => {\n    const d = $json.payload.invoice.bill_date;        // e.g. \"2022-07-14\"\n    const days = Number($json.payload.invoice.due_days || 0);\n    if (!d) return null;\n    const t = Date.parse(d + 'T00:00:00Z');           // lock to midnight UTC\n    return new Date(t + days * 86400000).toISOString().slice(0, 10);\n  })()\n}}\n"
+            },
+            {
+              "fieldId": "grand_total",
+              "fieldValue": "={{ $json.payload.invoice.grand_total }}"
+            },
+            {
+              "fieldId": "currency",
+              "fieldValue": "INR"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        144
+      ],
+      "id": "c0d1c7be-dd4a-422c-958a-7761029d7ef7",
+      "name": "invoice",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fan-out line items from the current input into one item per row.\n// Connect this node's output to your DB \"create row\" node.\n\nconst src = $(\"Get Raw Invoice\").first().json;            // current invoice payload\nconst toNum = (v) => v == null ? null : Number(String(v).replace(/[,\\s]/g, ''));\n\n// Get the array of line items regardless of shape\nlet li = src?.payload?.line_items?.line_items ?? src?.payload?.line_items ?? [];\nif (!Array.isArray(li) && li && typeof li === 'object') li = Object.values(li);\n\nconst out = (li || []).map((row, i) => ({\n  json: {\n    // line data to insert\n    line_no: i + 1,\n    name: row?.name ?? null,\n    description: row?.description ?? null,\n    hsn_sac: row?.hsn_sac ?? row?.hsn_or_sac ?? null,\n    quantity: toNum(row?.quantity) ?? 1,\n    rate: toNum(row?.rate),\n    amount: toNum(row?.amount),\n    discount_percent: toNum(row?.discount_percent),\n\n    // handy context (map these in your insert if your table needs them)\n    org_id: src?.org_id ?? src?.ctx?.org_id ?? null,\n    ingestion_id: src?.ingestion_id ?? null,\n    bill_number: src?.payload?.invoice?.bill_number ?? null,\n    bill_date: src?.payload?.invoice?.bill_date ?? null,\n    grand_total: toNum(src?.payload?.invoice?.grand_total),\n    raw_id: src?.raw_id ?? null\n  }\n}));\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        144
+      ],
+      "id": "6c946237-1f72-4700-8ad8-37b36333cd10",
+      "name": "Iterate Items"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        176,
+        144
+      ],
+      "id": "a59c6f46-ca7b-4da2-a21f-277f9bcde678",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "tableId": "invoice_lines",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "invoice_id",
+              "fieldValue": "={{ $('invoice').item.json.invoice_id }}"
+            },
+            {
+              "fieldId": "line_no",
+              "fieldValue": "={{ $json.line_no }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description }}"
+            },
+            {
+              "fieldId": "hsn_sac",
+              "fieldValue": "={{ $json.hsn_sac }}"
+            },
+            {
+              "fieldId": "quantity",
+              "fieldValue": "={{ $json.quantity }}"
+            },
+            {
+              "fieldId": "rate",
+              "fieldValue": "={{ $json.rate }}"
+            },
+            {
+              "fieldId": "amount",
+              "fieldValue": "={{ $json.amount }}"
+            },
+            {
+              "fieldId": "item_name",
+              "fieldValue": "={{ $json.name }}"
+            },
+            {
+              "fieldId": "discount_percent",
+              "fieldValue": "={{ $json.discount_percent ?? null }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        432,
+        128
+      ],
+      "id": "2bf7f2b7-b65e-4c75-8937-188ed4827ac5",
+      "name": "line items",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ffa6a420-66ab-4259-b345-fd71e1337e85",
+              "name": "invoice_id",
+              "value": "={{ $('invoice').item.json.invoice_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        432,
+        -48
+      ],
+      "id": "78cc5b94-0c7b-46c3-acb4-658c25bfc699",
+      "name": "Invoice Id"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "raw_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -768,
+        144
+      ],
+      "id": "1567793e-d79f-4d56-8ca5-0f73029ae5a6",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Raw Invoice": {
+      "main": [
+        [
+          {
+            "node": "invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "invoice": {
+      "main": [
+        [
+          {
+            "node": "Iterate Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iterate Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Invoice Id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "line items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "line items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Raw Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5674319a-d44f-4173-a1be-3d2784057379",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6879c4d326ba21d1ccb65b8539bd2e9444dca559b9181b34dd45567cb223f8c9"
+  },
+  "id": "Kn4lwIFwDbwHEnNJ",
+  "tags": []
+}

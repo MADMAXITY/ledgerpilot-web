@@ -1,0 +1,572 @@
+{
+  "name": "LedgerPilot - BillHandler",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.zohoapis.in/books/v3/bills",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "organization_id",
+              "value": "={{ $('invoice').item.json.org_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('set').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('get ingestion').item.json.bill_payload_draft }}",
+        "options": {}
+      },
+      "id": "6020a3f6-ae7c-4118-a857-d02c1d896a56",
+      "name": "Create Zoho Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        976,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "invoice_id"
+            },
+            {
+              "name": "access_token"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -480,
+        -176
+      ],
+      "id": "e8064172-753a-45ae-bfb6-e45303938545",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "tableId": "bills",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "zoho_bill_id",
+              "fieldValue": "={{ $json.bill.bill_id }}"
+            },
+            {
+              "fieldId": "org_id",
+              "fieldValue": "={{ $('invoice').item.json.org_id }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "posted"
+            },
+            {
+              "fieldId": "invoice_id",
+              "fieldValue": "={{ $('invoice').item.json.invoice_id }}"
+            },
+            {
+              "fieldId": "payload_sent",
+              "fieldValue": "={{ $('get ingestion').item.json.bill_payload_draft }}"
+            },
+            {
+              "fieldId": "vendor_id",
+              "fieldValue": "={{ $('get vendor').item.json.vendor_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        -288
+      ],
+      "id": "fd988da5-c673-49ed-8219-9770b6bdaf7d",
+      "name": "add bill",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "invoices",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "keyValue": "={{ $json.invoice_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -176
+      ],
+      "id": "240b3f92-f585-41c6-8d84-92ca4f417da2",
+      "name": "invoice",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "vendors",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "gstin",
+              "keyValue": "={{ $('invoice').item.json.vendor_gstin }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        768,
+        -288
+      ],
+      "id": "78cbb83b-ab0f-4cda-bcb9-13e96a7886f0",
+      "name": "get vendor",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "condition": "eq",
+              "keyValue": "={{ $('invoice').item.json.ingestion_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "billed"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        -288
+      ],
+      "id": "4b12ed00-d3a5-4fc6-b10a-c0ab56e23471",
+      "name": "update ingestion",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        -608
+      ],
+      "id": "98880847-a541-4dc7-9d5b-d67979159eb4",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "keyValue": "={{ $json.ingestion_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -176
+      ],
+      "id": "e9035bda-4ae5-466a-a30b-f94f7e97a989",
+      "name": "get ingestion",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ec6a2f1e-b372-425f-beba-3e1748e811b0",
+              "leftValue": "={{ $json.approval_mode }}",
+              "rightValue": "auto",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        320,
+        -176
+      ],
+      "id": "7b4f09ef-4050-4dd5-8d2b-58a34082021e",
+      "name": "is auto approval"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.ingestion_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "approved"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        576,
+        -288
+      ],
+      "id": "9b436f13-8c2a-48c9-bf77-1fdf3d8d5691",
+      "name": "approved",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9c62423e-ffcc-4131-a3b7-d516d259d30a",
+              "name": "invoice_id",
+              "value": "=26",
+              "type": "string"
+            },
+            {
+              "id": "35a44272-bdad-49ac-bce4-0a7b5a0106cc",
+              "name": "access_token",
+              "value": "=1000.2a1ae6b1930a7acf1c40ccfb0e3293ed.b80dce89d33a563ed386360dea676f13",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -320,
+        -608
+      ],
+      "id": "1820878c-33d8-429c-a2f1-5d8f177cebb3",
+      "name": "set-test"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9c62423e-ffcc-4131-a3b7-d516d259d30a",
+              "name": "invoice_id",
+              "value": "={{ $json.invoice_id}}",
+              "type": "string"
+            },
+            {
+              "id": "35a44272-bdad-49ac-bce4-0a7b5a0106cc",
+              "name": "access_token",
+              "value": "={{ $json.access_token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -272,
+        -176
+      ],
+      "id": "a5737df1-677e-4bc1-8492-aa18e5f7c715",
+      "name": "set"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "QZgSqPowGfEznOYs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/QZgSqPowGfEznOYs",
+          "cachedResultName": "LedgerPilot - UploadBillFile"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ingestion_id": "={{ $json.ingestion_id.toString() }}",
+            "access_token": "={{ $('set').item.json.access_token }}",
+            "bill_id": "={{ $('Create Zoho Bill').item.json.bill.bill_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "bill_id",
+              "displayName": "bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "access_token",
+              "displayName": "access_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "ingestion_id",
+              "displayName": "ingestion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1648,
+        -288
+      ],
+      "id": "f3fd6f08-dba6-482e-b3f5-472ba29d7a01",
+      "name": "Call 'LedgerPilot - UploadBillFile'"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Create Zoho Bill": {
+      "main": [
+        [
+          {
+            "node": "add bill",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add bill": {
+      "main": [
+        [
+          {
+            "node": "update ingestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "invoice": {
+      "main": [
+        [
+          {
+            "node": "get ingestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get vendor": {
+      "main": [
+        [
+          {
+            "node": "Create Zoho Bill",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "get ingestion": {
+      "main": [
+        [
+          {
+            "node": "is auto approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "is auto approval": {
+      "main": [
+        [
+          {
+            "node": "approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "approved": {
+      "main": [
+        [
+          {
+            "node": "get vendor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set-test": {
+      "main": [
+        []
+      ]
+    },
+    "set": {
+      "main": [
+        [
+          {
+            "node": "invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update ingestion": {
+      "main": [
+        [
+          {
+            "node": "Call 'LedgerPilot - UploadBillFile'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "efa91df5-9610-4714-b62e-adf0db6b9bbc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6879c4d326ba21d1ccb65b8539bd2e9444dca559b9181b34dd45567cb223f8c9"
+  },
+  "id": "2G6eQV7nPqqxvTLR",
+  "tags": []
+}

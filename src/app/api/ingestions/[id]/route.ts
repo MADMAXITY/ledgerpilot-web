@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminServerClient } from '@/lib/supabase-server'
 
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   const { id: idStr } = await ctx.params
   const id = Number(idStr)
-  const supabase = await createSupabaseServerClient({ allowCookieWrite: true })
+  const supabase = await createSupabaseAdminServerClient()
 
   const { data: ing, error } = await supabase
     .from('ingestions')
@@ -43,7 +43,13 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         .eq('org_id', ing.org_id)
         .in('item_id', itemIds)
       const map: Record<string, string> = Object.fromEntries(((cat as Array<{ item_id: string; name: string | null }> | null) || []).map((c) => [c.item_id, c.name || '']))
-      lines = lines.map((l) => ({ ...l, item_name: l.item_id && map[l.item_id] ? map[l.item_id] : l.item_name }))
+      // Only enrich when we have an item_id and the line is not marked 'to_create'.
+      // For 'to_create', prefer the name captured in invoice_lines.item_name.
+      lines = lines.map((l) => {
+        const canEnrich = !!l.item_id && (l.match_state !== 'to_create')
+        if (canEnrich && l.item_id && map[l.item_id]) return { ...l, item_name: map[l.item_id] }
+        return l
+      })
     }
   } catch {
     // ignore
@@ -96,10 +102,16 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         type It = { item_id: string; name: string | null }
         itemMap = Object.fromEntries((((items as unknown) as It[] | null) || []).map((i) => [i.item_id, i.name || '']))
       }
-      draftLineItems = draftItems.map((li) => ({
-        ...li,
-        item_name: li.item_id ? itemMap[li.item_id] || null : null,
-      }))
+      // Map draft line items to invoice_lines sequentially when no item_id is present.
+      // This supports the backend change where items to be created don't carry an item_id yet.
+      draftLineItems = draftItems.map((li, idx) => {
+        const nameFromCatalog = li.item_id ? (itemMap[li.item_id] || null) : null
+        const nameFromDbLine = !li.item_id ? (lines[idx]?.item_name ?? null) : null
+        return {
+          ...li,
+          item_name: nameFromCatalog ?? nameFromDbLine,
+        }
+      })
     } catch {
       // ignore draft enrichment errors
     }
@@ -125,4 +137,23 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         }
       : null,
   })
+}
+
+export async function DELETE(_req: NextRequest, ctx: Ctx) {
+  const { id: idStr } = await ctx.params
+  const id = Number(idStr)
+  if (!Number.isFinite(id)) return NextResponse.json({ ok: false, error: 'invalid id' }, { status: 400 })
+  const supabase = await createSupabaseAdminServerClient()
+  const { data: existing } = await supabase
+    .from('ingestions')
+    .select('ingestion_id, status')
+    .eq('ingestion_id', id)
+    .maybeSingle()
+  if (!existing) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+  if (String((existing as any).status || '').toLowerCase() === 'billed') {
+    return NextResponse.json({ ok: false, error: 'cannot delete billed ingestion' }, { status: 400 })
+  }
+  const { error } = await supabase.from('ingestions').delete().eq('ingestion_id', id)
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }

@@ -1,7 +1,11 @@
 "use client"
 import { useEffect, useMemo, useState } from 'react'
+import { mutate as globalMutate } from 'swr'
 import useSWR from 'swr'
-import { Box, Chip, FormControl, InputLabel, MenuItem, Select, Stack, Button, Typography, ToggleButtonGroup, ToggleButton, Tooltip } from '@mui/material'
+import { Box, Chip, FormControl, InputLabel, MenuItem, Select, Stack, Button, Typography, ToggleButtonGroup, ToggleButton, Tooltip, IconButton } from '@mui/material'
+import DeleteRounded from '@mui/icons-material/DeleteRounded'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog'
+import { useSnackbar } from 'notistack'
 import { DataGrid, GridColDef } from '@mui/x-data-grid'
 //
 import type { IngestionListItem, UiIngestionState } from '@/types/contracts'
@@ -29,7 +33,6 @@ function mapUnknownToListItem(r: UnknownRecord): IngestionListItem {
     vendor_guess: (r['vendor_guess'] as string | null) ?? null,
     total_guess: (r['total_guess'] as number | null) ?? null,
     bill_number: (r['bill_number'] as string | null) ?? null,
-    approval_mode: (r['approval_mode'] as string | null) ?? undefined,
     ingestion_status: (r['ingestion_status'] as string | null) ?? undefined,
     approval_status: (r['approval_status'] as string | null) ?? undefined,
     error: (r['error'] as string | null) ?? null,
@@ -62,9 +65,13 @@ export default function ReviewerTable({
     return `/api/ingestions/list?${params.toString()}`
   }, [state])
 
-  const { data, isLoading } = useSWR<IngestionListItem[]>(query, listFetcher)
+  const { data, isLoading, mutate } = useSWR<IngestionListItem[]>(query, listFetcher)
   const [activeIndex, setActiveIndex] = useState<number>(-1)
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [deleteMode, setDeleteMode] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<IngestionListItem | null>(null)
+  const { enqueueSnackbar } = useSnackbar()
 
   // Keep active index in sync with activeId when provided
   useEffect(() => {
@@ -72,6 +79,16 @@ export default function ReviewerTable({
     const idx = data.findIndex((r) => String(r.id) === String(activeId))
     if (idx >= 0) setActiveIndex(idx)
   }, [activeId, data])
+
+  // Refresh when other parts of UI signal updates (e.g., mark ready)
+  useEffect(() => {
+    const handler = () => {
+      void mutate()
+      void globalMutate('/api/ingestions/metrics')
+    }
+    window.addEventListener('review:refresh', handler)
+    return () => window.removeEventListener('review:refresh', handler)
+  }, [mutate])
 
   const columns: GridColDef[] = [
     {
@@ -134,20 +151,43 @@ export default function ReviewerTable({
         return <Chip size="small" label={cfg.label} color={cfg.color} variant={v === 'ready' ? 'filled' : 'outlined'} />
       },
     },
-    {
-      field: 'approval_mode',
-      headerName: 'Mode',
-      width: 120,
-      sortable: false,
-      filterable: false,
-      renderCell: (p) => {
-        const v = String(p.value || '').toLowerCase()
-        const label = v === 'auto' ? 'Auto' : v === 'manual' ? 'Manual' : '-'
-        const color: 'default' | 'info' = v === 'auto' ? 'info' : 'default'
-        return <Chip size="small" label={label} color={color} variant={v === 'auto' ? 'filled' : 'outlined'} />
-      },
-    },
-    // Action column removed; row click opens slide-in
+    // Mode column removed (approval is always manual)
+    // Action column (delete) toggled by deleteMode
+    ...(deleteMode
+      ? ([
+          {
+            field: 'actions',
+            headerName: '',
+            width: 80,
+            sortable: false,
+            filterable: false,
+            renderCell: (p: any) => {
+              const row = p.row as IngestionListItem & { ingestion_status?: string }
+              const status = String(row.ingestion_status || '').toLowerCase()
+              const canDelete = status !== 'billed'
+              return (
+                <Tooltip title={canDelete ? 'Delete' : 'Cannot delete billed'}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      disabled={!canDelete}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (!canDelete) return
+                        setPendingDelete(row)
+                        setConfirmOpen(true)
+                      }}
+                    >
+                      <DeleteRounded fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )
+            },
+          } as GridColDef,
+        ] as GridColDef[])
+      : ([] as GridColDef[])),
   ]
 
   // Keyboard navigation: J/K
@@ -205,7 +245,35 @@ export default function ReviewerTable({
           <ToggleButton value="comfortable">Comfortable</ToggleButton>
           <ToggleButton value="compact">Compact</ToggleButton>
         </ToggleButtonGroup>
+        <Tooltip title={deleteMode ? 'Exit delete mode' : 'Enter delete mode'}>
+          <Button size="small" variant={deleteMode ? 'contained' : 'outlined'} color={deleteMode ? 'error' : 'inherit'} onClick={() => setDeleteMode((v) => !v)}>
+            {deleteMode ? 'Delete mode: ON' : 'Delete mode'}
+          </Button>
+        </Tooltip>
       </Stack>
+      <ConfirmDeleteDialog
+        open={confirmOpen}
+        onClose={() => {
+          setConfirmOpen(false)
+          setPendingDelete(null)
+        }}
+        vendor={pendingDelete?.vendor_guess || null}
+        bill={pendingDelete?.bill_number || null}
+        onConfirm={async () => {
+          if (!pendingDelete) return
+          try {
+            const res = await fetch(`/api/ingestions/${pendingDelete.id}`, { method: 'DELETE' })
+            if (!res.ok) throw new Error(await res.text())
+            enqueueSnackbar('Deleted', { variant: 'success' })
+            setConfirmOpen(false)
+            setPendingDelete(null)
+            await mutate()
+            try { (await import('swr')).mutate('/api/ingestions/metrics') } catch {}
+          } catch (e: any) {
+            enqueueSnackbar(e?.message || 'Delete failed', { variant: 'error' })
+          }
+        }}
+      />
       <Box sx={{ height: 560, width: '100%' }}>
         <DataGrid
           rows={data || []}

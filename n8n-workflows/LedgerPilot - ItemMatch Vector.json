@@ -1,0 +1,542 @@
+{
+  "name": "LedgerPilot - ItemMatch Vector",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "invoices",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "keyValue": "={{ $json.invoice_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        224
+      ],
+      "id": "431ba118-ea24-46dd-9633-1851b646dabd",
+      "name": "get invoice",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "invoice_lines",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.invoice_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1104,
+        224
+      ],
+      "id": "2f0c8823-195d-4714-bc4e-429d7cefcf1d",
+      "name": "get line items",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -880,
+        224
+      ],
+      "id": "018091bf-9605-49b3-bce8-bac25cf6cf46",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node — Mode: \"Run Once for All Items\"\n// Inputs:\n//  - \"Vector Similarity Search\": multiple items (already thresholded by RPC)\n//  - \"Item Fields\": current invoice line item { item_name, hsn_sac/hsn/hsn8, qty, amount }\n\nfunction normHSN(v) {\n  const d = (v ?? '').toString().replace(/\\D/g, '');\n  return d.substring(0, 8) || null; // compare first 8 digits\n}\nfunction num(n) {\n  const x = Number(n);\n  return Number.isFinite(x) ? x : 0;\n}\n\n// 1) Current line from Item Fields (fallbacks kept just in case)\nconst lineItem =\n  ($items('Item Fields')[0]?.json) ||\n  ($items('get line items')[0]?.json) ||\n  $json;\n\nconst queryName = lineItem.item_name || lineItem.name || null;\nconst queryHSN  = normHSN(lineItem.hsn_sac || lineItem.hsn8 || lineItem.hsn || null);\n\n// 2) Collect candidates (already similarity-thresholded upstream)\nconst hits = $items('Vector Similarity Search').map(i => ({\n  item_id: i.json.item_id ?? i.json.id ?? null,\n  name: i.json.name ?? i.json.item_name ?? null,\n  hsn_raw: i.json.hsn8 ?? i.json.hsn_sac ?? i.json.hsn ?? null,\n  hsn_norm: normHSN(i.json.hsn8 ?? i.json.hsn_sac ?? i.json.hsn ?? null),\n  similarity: num(i.json.similarity ?? i.json.score ?? 0),\n  raw: i.json\n}));\n\n// 3) Sort by similarity desc (DB might already do this; we enforce anyway)\nhits.sort((a, b) => b.similarity - a.similarity);\n\n// 4) Choose\nlet chosen = null;\nlet reason = null;\n\nif (!hits.length) {\n  reason = 'No candidates returned by vector search.';\n} else if (queryHSN) {\n  // strict: first with HSN match, otherwise no_match\n  chosen = hits.find(h => h.hsn_norm && h.hsn_norm === queryHSN) || null;\n  reason = chosen\n    ? 'Picked first candidate (highest→lowest) with matching HSN.'\n    : 'No HSN match among candidates.';\n} else {\n  // no HSN in query → top-1 by similarity\n  chosen = hits[0];\n  reason = 'Query has no HSN; picked top-1 by similarity.';\n}\n\n// 5) Emit summary\nreturn [\n  {\n    json: {\n      decision: chosen ? 'match' : 'no_match',\n      reason,\n      query: {\n        item_name: queryName,\n        hsn8: queryHSN,\n        qty: lineItem.qty ?? null,\n        amount: lineItem.amount ?? null\n      },\n      selected: chosen,\n      candidates_sorted: hits.slice(0, 5).map(h => ({\n        item_id: h.item_id,\n        name: h.name,\n        hsn8: h.hsn_norm,\n        similarity: h.similarity\n      }))\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        224
+      ],
+      "id": "bfa61ab2-603f-433d-a857-31d34549cccb",
+      "name": "Matcher"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fb865044-ae46-469e-942f-cfe4fdbd4c3a",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "match",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        224
+      ],
+      "id": "ef733c2b-d518-492c-9e5f-4493e4915bad",
+      "name": "match?"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "items_catalog_duplicate",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "item_id",
+              "keyValue": "={{ $json.selected.item_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        496,
+        -16
+      ],
+      "id": "168f238b-264c-418e-acaa-f9e9a304aa53",
+      "name": "Get Item",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "invoice_lines",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Item Fields').last().json.invoice_id }}"
+            },
+            {
+              "keyName": "line_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Item Fields').last().json.line_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "match_state",
+              "fieldValue": "auto_matched"
+            },
+            {
+              "fieldId": "item_id",
+              "fieldValue": "={{ $json.item_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -16
+      ],
+      "id": "ae475cad-095a-493d-a834-8733205e1240",
+      "name": "Update Matched",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "invoice_lines",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Item Fields').last().json.invoice_id }}"
+            },
+            {
+              "keyName": "line_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Item Fields').last().json.line_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "match_state",
+              "fieldValue": "to_create"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        736,
+        240
+      ],
+      "id": "6560c00d-ee7c-4dd1-83a6-19230955f708",
+      "name": "Update To-Create",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "invoice_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1568,
+        224
+      ],
+      "id": "eb2ddf49-4296-495d-a5ee-e253bef4d2f8",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            },
+            {
+              "name": "input",
+              "value": "={{ $json.item_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Get Query Embedding",
+      "position": [
+        -432,
+        224
+      ],
+      "id": "d5f75d0c-6e81-438d-947d-848c51a95636",
+      "typeVersion": 4.2,
+      "credentials": {
+        "openAiApi": {
+          "id": "Q2TQX21KBUqSSNxI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fdwerzjeipmpbgzcjdit.supabase.co/rest/v1/rpc/find_similar_items",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query_embedding\": [{{ $json.data[0].embedding }}],\n  \"p_org_id\": \"{{ $('get invoice').item.json.org_id }}\",\n  \"match_count\": 10,\n  \"match_threshold\": 0.7\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Vector Similarity Search",
+      "position": [
+        -208,
+        224
+      ],
+      "id": "74dac67c-aa49-45e0-bd2c-b5a08c724b74",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "56f558f1-e995-4061-94d7-c9842c12e922",
+              "name": "line_id",
+              "value": "={{ $json.line_id }}",
+              "type": "string"
+            },
+            {
+              "id": "e421e9d0-2bbc-4b44-b57d-dc5686cc6406",
+              "name": "invoice_id",
+              "value": "={{ $json.invoice_id }}",
+              "type": "string"
+            },
+            {
+              "id": "42b4d85d-5300-4666-849e-38167fbabc89",
+              "name": "hsn_sac",
+              "value": "={{ $json.hsn_sac }}",
+              "type": "string"
+            },
+            {
+              "id": "d65871dd-772f-4a80-89ec-91314211a344",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "72be49f2-e0fe-4403-9dc3-bc7b7e68e9d3",
+              "name": "item_name",
+              "value": "={{ $json.item_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -656,
+        224
+      ],
+      "id": "6f96586b-4eb3-4092-be1e-c745b9d7b6d5",
+      "name": "Item Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "get invoice": {
+      "main": [
+        [
+          {
+            "node": "get line items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get line items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Item Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Matcher": {
+      "main": [
+        [
+          {
+            "node": "match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "match?": {
+      "main": [
+        [
+          {
+            "node": "Get Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update To-Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Item": {
+      "main": [
+        [
+          {
+            "node": "Update Matched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Matched": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update To-Create": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "get invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Query Embedding": {
+      "main": [
+        [
+          {
+            "node": "Vector Similarity Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Similarity Search": {
+      "main": [
+        [
+          {
+            "node": "Matcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Item Fields": {
+      "main": [
+        [
+          {
+            "node": "Get Query Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8b89b67f-140e-47c7-88d6-007dc2f50170",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6879c4d326ba21d1ccb65b8539bd2e9444dca559b9181b34dd45567cb223f8c9"
+  },
+  "id": "gL2EA4a7gQOJoH17",
+  "tags": []
+}

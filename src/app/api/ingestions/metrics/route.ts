@@ -24,11 +24,22 @@ export async function GET() {
       .eq('approval_status', 'ready')
       .not('bill_payload_draft', 'is', null)
     const failedQ = supabase.from('ingestions').select('*', { count: 'exact', head: true }).eq('status', 'failed')
+    // matched + pending approval = items need resolution
+    const needResQ = supabase
+      .from('ingestions')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'matched')
+      .eq('approval_status', 'pending')
 
-    const [{ count: billed_30d, error: e1 }, { count: billed_total, error: e2 }, { count: ready_count, error: e3 }, { count: failed_count, error: e4 }] =
-      await Promise.all([billed30Q, billedTotalQ, readyQ, failedQ])
+    const [
+      { count: billed_30d, error: e1 },
+      { count: billed_total, error: e2 },
+      { count: ready_count, error: e3 },
+      { count: failed_count, error: e4 },
+      { count: needs_resolution, error: e5 },
+    ] = await Promise.all([billed30Q, billedTotalQ, readyQ, failedQ, needResQ])
 
-    const err = e1 || e2 || e3 || e4
+    const err = e1 || e2 || e3 || e4 || e5
     if (err) throw new Error(err.message)
 
     return NextResponse.json({
@@ -36,6 +47,7 @@ export async function GET() {
       billed_total: billed_total || 0,
       ready_count: ready_count || 0,
       failed_count: failed_count || 0,
+      needs_resolution: needs_resolution || 0,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'metrics error'

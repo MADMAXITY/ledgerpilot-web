@@ -1,6 +1,6 @@
 "use client"
 import { useRef, useState } from 'react'
-import { Alert, Box, Button, LinearProgress, Paper, Stack, Typography, ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
+import { Alert, Box, Button, LinearProgress, Paper, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import { useSnackbar } from 'notistack'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -16,7 +16,7 @@ export default function UploadDropzone({ onCompleted }: { onCompleted?: () => vo
   const [inputKey, setInputKey] = useState(() => `${Date.now()}`)
   const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string; details?: string } | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const [approvalMode, setApprovalMode] = useState<'manual' | 'auto'>('manual')
+    // Approval mode is always manual (auto removed)
   const [showErrorDetails, setShowErrorDetails] = useState(false)
 
   const handleFiles = async (fileList: FileList | null) => {
@@ -58,7 +58,7 @@ export default function UploadDropzone({ onCompleted }: { onCompleted?: () => vo
           org_id: orgId,
           file_id: fileRow.file_id,
           status: 'queued',
-          approval_mode: approvalMode,
+          // approval_mode defaults to 'manual' on the server,
         })
         .select()
         .single()
@@ -92,21 +92,7 @@ export default function UploadDropzone({ onCompleted }: { onCompleted?: () => vo
       }}
     >
       <Stack spacing={2} alignItems="center">
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="body2" color="text.secondary">Approval mode:</Typography>
-          <ToggleButtonGroup
-            size="small"
-            color="primary"
-            value={approvalMode}
-            exclusive
-            onChange={(_e, v) => {
-              if (v) setApprovalMode(v)
-            }}
-          >
-            <ToggleButton value="manual">Manual</ToggleButton>
-            <ToggleButton value="auto">Auto</ToggleButton>
-          </ToggleButtonGroup>
-        </Stack>
+        {/* Approval mode is always manual; toggle removed */}
         <CloudUploadIcon sx={{ fontSize: 36, color: 'primary.main' }} />
         <Typography variant="h6">Upload invoice</Typography>
         <Typography variant="body2" color="text.secondary">

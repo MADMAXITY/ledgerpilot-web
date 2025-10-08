@@ -1,0 +1,203 @@
+{
+  "name": "LedgerPilot - BillPayloadBuilder",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "invoices",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "keyValue": "={{ $json.invoice_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        64,
+        64
+      ],
+      "id": "871b90dd-bff1-4b12-80ec-6f88457c0598",
+      "name": "get invoice",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "invoice_lines",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "invoice_id",
+              "keyValue": "={{ $json.invoice_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        288,
+        64
+      ],
+      "id": "e517a281-88b2-49b8-92c8-cb5c97cc4c42",
+      "name": "get line items",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const invoice = ($items('get invoice')[0]?.json) || {};\nconst lines = $items('get line items').map(i => i.json);\n\n\nreturn [\n  {\n    json: {\n      invoice,\n      lines,\n      line_count: lines.length\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        64
+      ],
+      "id": "771516fd-b88d-448a-b770-5751178b502d",
+      "name": "combine"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "vendors",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "gstin",
+              "keyValue": "={{ $json.invoice.vendor_gstin }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        736,
+        64
+      ],
+      "id": "64adf952-7ff8-4285-9a56-ac1522901321",
+      "name": "get vendor id",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Inputs:\n *  - vendor_id        = $input.first().json.vendor_id\n *  - invoice, lines   = $('combine').first().json.invoice / .json.lines\n * Behavior:\n *  - Keeps line rate as-is\n *  - Sets discount_type: \"item_level\"\n *  - Sends discount (amount) per line, computed from rate * quantity * (discount_percent/100)\n *  - Does NOT force account_id for item lines (Zoho will use item’s configured account)\n *  - Forces tax_id default only if not present\n *  - Adds adjustment / adjustment_description\n * Output:\n *  - { zoho_bill_payload: {...} } for Zoho Books Bills API\n */\n\nconst DEFAULT_TAX_ID = '2966067000000035283';  // keep if you want a fallback; else remove\n\nconst BILL_ADJUSTMENT = 0;            // set null or 0 to skip\nconst BILL_ADJUSTMENT_DESC = 'Round-off';\n\nconst vendor_id = String($input.first().json.vendor_id || '').trim();\nconst combo     = $('combine').first().json || {};\nconst invoice   = combo.invoice || {};\nconst linesSrc  = combo.lines;\n\nconst toStr = v => (v === undefined || v === null ? null : String(v).trim());\nconst toNum = v => (\n  v === undefined || v === null || v === '' || Number.isNaN(Number(v))\n    ? null\n    : Number(v)\n);\n\nfunction normalizeLines(src) {\n  if (!src) return [];\n  if (Array.isArray(src)) return src;\n  if (Array.isArray(src.lines)) return src.lines;\n  if (typeof src === 'object') {\n    const vals = Object.values(src);\n    if (vals.length && typeof vals[0] === 'object') return vals;\n  }\n  if (src.description || src.item_id || src.item_name) return [src];\n  return [];\n}\n\n// 2-decimal rounding like UI\nconst round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;\n\nif (!vendor_id) throw new Error('vendor_id missing');\n\nconst lines = normalizeLines(linesSrc);\nif (!lines.length) throw new Error('No line items found under combine.lines');\n\n// ---------- build line_items ----------\nconst line_items = lines.map(li => {\n  const item_id   = toStr(li.item_id);\n  const hsn       = toStr(li.hsn_sac);\n  const qty       = toNum(li.quantity) ?? 0;\n  const rate      = toNum(li.rate) ?? 0;\n\n  const dpRaw = (li.discount_percent === undefined || li.discount_percent === null || li.discount_percent === '')\n                  ? null : Number(li.discount_percent);\n  const discountPct = (dpRaw === null || Number.isNaN(dpRaw)) ? 0 : dpRaw;\n\n  // discount amount for the WHOLE LINE (currency)\n  const discountAmt = round2(rate * qty * (discountPct / 100));\n\n  // For item lines: omit account_id so Zoho uses the item’s account.\n  // For category lines (no item_id): require account_id or throw.\n  if (!item_id && !li.account_id) {\n    throw new Error('Category line requires account_id (no item_id present).');\n  }\n\n  const out = {\n    ...(item_id ? { item_id } : { account_id: toStr(li.account_id) }), // only include for category lines\n    ...(toStr(li.tax_id) ? { tax_id: toStr(li.tax_id) } : (DEFAULT_TAX_ID ? { tax_id: DEFAULT_TAX_ID } : {})),\n    ...(hsn ? { hsn_or_sac: hsn } : {}),\n\n    description: toStr(li.item_name || li.description) || undefined,\n    quantity: qty,\n    rate: rate,\n    discount: discountAmt || 0,   // Zoho accepts discount as amount per line\n  };\n\n  // strip accidental empties\n  for (const k of Object.keys(out)) {\n    const v = out[k];\n    if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) delete out[k];\n  }\n  return out;\n});\n\n// ---------- header ----------\nconst payload = {\n  vendor_id,\n  bill_number: toStr(invoice.bill_number) || undefined,\n  date:        toStr(invoice.bill_date)   || undefined,   // yyyy-mm-dd\n  ...(toNum(invoice.due_days) !== null ? { payment_terms: toNum(invoice.due_days) } : {}),\n  ...(toStr(invoice.due_date) ? { due_date: toStr(invoice.due_date) } : {}),\n  is_item_level_tax_calc: true,\n  discount_type: 'item_level',\n  ...(typeof BILL_ADJUSTMENT === 'number' && BILL_ADJUSTMENT !== 0\n      ? { adjustment: BILL_ADJUSTMENT, adjustment_description: BILL_ADJUSTMENT_DESC }\n      : {}),\n  ...(toStr(invoice.reference_number) ? { reference_number: toStr(invoice.reference_number) } : {}),\n  ...(toStr(invoice.notes) ? { notes: toStr(invoice.notes) } : {}),\n  line_items\n};\n\n// Deep prune\n(function prune(o){\n  if (Array.isArray(o)) { o.forEach(prune); return; }\n  if (o && typeof o === 'object') {\n    for (const k of Object.keys(o)) {\n      const v = o[k];\n      if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) delete o[k];\n      else prune(v);\n    }\n  }\n})(payload);\n\nreturn [{ json: { zoho_bill_payload: payload } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        64
+      ],
+      "id": "71ee3e9e-6e92-4949-8ef6-ff1f135273f1",
+      "name": "create payload"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "invoice_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -160,
+        64
+      ],
+      "id": "2c5c24dd-4624-4c89-a5de-b92afd83e2ca",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "get invoice": {
+      "main": [
+        [
+          {
+            "node": "get line items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get line items": {
+      "main": [
+        [
+          {
+            "node": "combine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "combine": {
+      "main": [
+        [
+          {
+            "node": "get vendor id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get vendor id": {
+      "main": [
+        [
+          {
+            "node": "create payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "get invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3bd4f1b7-bb5f-4527-96d9-a4e4feb662bf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6879c4d326ba21d1ccb65b8539bd2e9444dca559b9181b34dd45567cb223f8c9"
+  },
+  "id": "Pb3CCCqu1OE9iiuf",
+  "tags": []
+}

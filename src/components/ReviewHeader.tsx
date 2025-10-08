@@ -12,9 +12,10 @@ type Props = {
   onReject?: () => void
   onView?: () => void
   canAct?: boolean
+  onMarkReady?: (() => void) | null
 }
 
-export default function ReviewHeader({ vendor, billNo, billDate, status, mode, onApprove, onReject, onView, canAct }: Props) {
+export default function ReviewHeader({ vendor, billNo, billDate, status, mode, onApprove, onReject, onView, canAct, onMarkReady }: Props) {
   const statusColor: ChipProps['color'] = status === 'billed' ? 'success' : status === 'failed' ? 'error' : 'warning'
 
   return (
@@ -70,6 +71,26 @@ export default function ReviewHeader({ vendor, billNo, billDate, status, mode, o
             </Tooltip>
           </>
         )}
+        {!canAct && onMarkReady ? (
+          <Tooltip title="Mark as ready for approval">
+            <span>
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={onMarkReady}
+                sx={{
+                  borderColor: 'rgba(245,158,11,.34)',
+                  background: 'rgba(245,158,11,.10)',
+                  color: '#FBBF24',
+                  textTransform: 'none',
+                  '&:hover': { background: 'rgba(245,158,11,.16)', borderColor: 'rgba(245,158,11,.46)' },
+                }}
+              >
+                Mark Ready
+              </Button>
+            </span>
+          </Tooltip>
+        ) : null}
         <Tooltip title="View uploaded bill (V)">
           <Button
             variant="text"

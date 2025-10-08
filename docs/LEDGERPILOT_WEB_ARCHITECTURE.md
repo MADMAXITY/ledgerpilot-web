@@ -58,8 +58,12 @@ App shell:
   - Emits fields: `id, created_at, state (UI), ingestion_status, approval_status, approval_mode, vendor_guess, bill_number, total_guess`.
 - `GET /api/ingestions/:id` — Detail view for Review drawer:
   - Reads `ingestions` (status, approval_mode/status, `bill_payload_draft`) + `files` (resolve `storage_key`).
-  - Reads `invoices` + `invoice_lines` (enriches lines with item names from `items_catalog_duplicate`).
-  - Enriches `bill_payload_draft` with vendor name (`vendors`) and with draft line item names (`items_catalog_duplicate`).
+  - Reads `invoices` + `invoice_lines` and enriches item names:
+    - If a line has `item_id` and is not `to_create`, look up name in `items_catalog_duplicate`.
+    - If a line is `to_create` (no `item_id`), keep the `invoice_lines.item_name` as the display name.
+  - Enriches `bill_payload_draft` with vendor name (`vendors`) and line item names:
+    - When a draft line has `item_id`, look up name in `items_catalog_duplicate`.
+    - When a draft line has no `item_id`, map sequentially to `invoice_lines` for that invoice (1→1st, 2→2nd, …) and use the corresponding `invoice_lines.item_name` as the display name.
 - `ALL /api/n8n/[...path]` — Proxy to `NEXT_PUBLIC_API_BASE_URL` (CORS fallback).
 - `GET|POST /api/settings/oauth` — Reads/creates/updates `oauth_tokens` per current org (requires refresh_token only for initial create; NOT NULL column).
 - `POST /api/settings/org` — Upserts org + binds current profile to that org.

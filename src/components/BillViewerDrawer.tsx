@@ -54,6 +54,7 @@ export default function BillViewerDrawer({
       anchor="left"
       open={open}
       onClose={onClose}
+      variant="persistent"
       PaperProps={{ sx: { width: { xs: '100%', md: '60%' }, mt: { xs: '56px', sm: '64px' }, height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' } } }}
     >
       <Toolbar sx={{ px: 2, justifyContent: 'space-between', gap: 1 }}>

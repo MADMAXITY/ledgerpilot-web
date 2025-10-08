@@ -1,0 +1,804 @@
+{
+  "name": "LedgerPilot - Process Ingestion V2",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Set Vars\n",
+        "height": 256,
+        "width": 1296,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1520,
+        -112
+      ],
+      "typeVersion": 1,
+      "id": "bb54dac6-8d12-4953-9664-af7a4a932769",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.in/oauth/v2/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "={{ $json.refresh_token }}"
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $json.client_secret }}"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cdc8d375-6742-4d1e-9554-4d79043ea2a4",
+      "name": "Refresh Zoho Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -800,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "259f35d6-2fa3-47d5-b111-6f6edf3049ae",
+              "name": "org_id",
+              "value": "={{ $('ingestions').item.json.org_id }}",
+              "type": "string"
+            },
+            {
+              "id": "4a6ed08c-f30d-4e96-8994-3af8d6c25d6a",
+              "name": "file_id",
+              "value": "={{ $('ingestions').item.json.file_id }}",
+              "type": "number"
+            },
+            {
+              "id": "851a5a62-f4bc-4796-a6cc-9bb5e7ec4a68",
+              "name": "storage_key",
+              "value": "={{ $('files').item.json.storage_key }}",
+              "type": "string"
+            },
+            {
+              "id": "6bc4c27c-f194-48bc-ac8f-1e7484c497ed",
+              "name": "mime_type",
+              "value": "={{ $('files').item.json.mime_type }}",
+              "type": "string"
+            },
+            {
+              "id": "29286d4c-ace7-4c64-bc83-7072c19369ac",
+              "name": "ingestion_id",
+              "value": "={{ $('ingestions').item.json.ingestion_id }}",
+              "type": "number"
+            },
+            {
+              "id": "3aff31e3-fd1a-4cd6-a7b5-fb8f55da487a",
+              "name": "access_token",
+              "value": "={{ $json.access_token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -576,
+        -32
+      ],
+      "id": "1a3983d7-1eff-4528-84a8-eba875b0d949",
+      "name": "PostUpload Vars"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "oauth_tokens",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "org_id",
+              "keyValue": "={{ $('ingestions').item.json.org_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        -32
+      ],
+      "id": "079c33cd-81d4-497e-83a6-609ff493306e",
+      "name": "get zoho tokens",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.ingestion_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "extracting"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        -32
+      ],
+      "id": "0c141e44-082d-4eea-bdd5-aa8317a34f47",
+      "name": "Status -> Extracting",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Processing Pipeline\n\n\n",
+        "height": 224,
+        "width": 1536,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1520,
+        176
+      ],
+      "typeVersion": 1,
+      "id": "2f2ab94f-bae5-4d90-8c00-960564f763dd",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "1sUaqZSX8vyY0MwV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/1sUaqZSX8vyY0MwV",
+          "cachedResultName": "LedgerPilot Extract"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mime_type": "={{ $('PostUpload Vars').item.json.mime_type }}",
+            "storage_key": "={{ $('PostUpload Vars').item.json.storage_key }}",
+            "ingestion_id": "={{ $json.ingestion_id.toString() }}",
+            "file_id": "={{ $json.file_id.toString() }}",
+            "org_id": "={{ $json.org_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mime_type",
+              "displayName": "mime_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "ingestion_id",
+              "displayName": "ingestion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "storage_key",
+              "displayName": "storage_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "file_id",
+              "displayName": "file_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "org_id",
+              "displayName": "org_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1472,
+        240
+      ],
+      "id": "62ee1909-2bfe-46d3-806e-139191130844",
+      "name": "Extract",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "invoices_raw",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "org_id",
+              "fieldValue": "={{ $('PostUpload Vars').item.json.org_id }}"
+            },
+            {
+              "fieldId": "ingestion_id",
+              "fieldValue": "={{ $('PostUpload Vars').item.json.ingestion_id }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ $json.output }}"
+            },
+            {
+              "fieldId": "extractor",
+              "fieldValue": "gemini-2.5-flash"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1248,
+        240
+      ],
+      "id": "1ebfdb8f-e922-4f82-a2ad-eb2c533aaa60",
+      "name": "invoices_raw",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Kn4lwIFwDbwHEnNJ",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Kn4lwIFwDbwHEnNJ",
+          "cachedResultName": "LedgerPilot Normalize"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "raw_id": "={{ $json.raw_id.toString() }}"
+          },
+          "matchingColumns": [
+            "raw_id"
+          ],
+          "schema": [
+            {
+              "id": "raw_id",
+              "displayName": "raw_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1024,
+        240
+      ],
+      "id": "e4039453-f22d-43e0-b955-f588d09cf785",
+      "name": "Normalize",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ooiG45OA4s7TiIJg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ooiG45OA4s7TiIJg",
+          "cachedResultName": "LedgerPilot - HandleVendor"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $json.invoice_id.toString() }}",
+            "access_token": "={{ $('PostUpload Vars').item.json.access_token }}"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "access_token",
+              "displayName": "access_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -576,
+        240
+      ],
+      "id": "c4f90655-8f1f-480a-a503-caa5ec349fbf",
+      "name": "HandleVendor",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Pb3CCCqu1OE9iiuf",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Pb3CCCqu1OE9iiuf",
+          "cachedResultName": "LedgerPilot - BillPayloadBuilder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $('Normalize').item.json.invoice_id.toString() }}",
+            "access_token": "={{ $('PostUpload Vars').item.json.access_token }}"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "access_token",
+              "displayName": "access_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        240
+      ],
+      "id": "c9e72e04-3354-418a-84de-e17249a8be98",
+      "name": "create payload",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "condition": "eq",
+              "keyValue": "={{ $('PostUpload Vars').item.json.ingestion_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "bill_payload_draft",
+              "fieldValue": "={{ $json.zoho_bill_payload }}"
+            },
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "pending"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "matched"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        240
+      ],
+      "id": "4d8390fd-da8a-4c64-a4a3-191e72c03806",
+      "name": "update ingestion",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "ingestion_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1472,
+        -320
+      ],
+      "id": "37fa82bf-8e70-4907-b5d9-caaec8f9e6f5",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "ingestions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ingestion_id",
+              "keyValue": "={{ $json.ingestion_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1472,
+        -32
+      ],
+      "id": "8ae8f374-383d-4c5d-b4fe-c8db68d61180",
+      "name": "ingestions",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "files",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "file_id",
+              "keyValue": "={{ $json.file_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1248,
+        -32
+      ],
+      "id": "665b6cfe-d83d-4ccb-a2f9-d45fc719b374",
+      "name": "files",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YGlNQsor4RTqQEn4",
+          "name": "InvoicePilot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "x1gMFHouSYj1AOi5",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/x1gMFHouSYj1AOi5",
+          "cachedResultName": "LedgerPilot - ItemMatch Candidates"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $json.invoice_id.toString() }}"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -800,
+        240
+      ],
+      "id": "82604fdb-da88-4c65-981e-91ad102fd759",
+      "name": "ItemMatch  - Candidates",
+      "executeOnce": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Refresh Zoho Token": {
+      "main": [
+        [
+          {
+            "node": "PostUpload Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostUpload Vars": {
+      "main": [
+        [
+          {
+            "node": "Status -> Extracting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get zoho tokens": {
+      "main": [
+        [
+          {
+            "node": "Refresh Zoho Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status -> Extracting": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "invoices_raw",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "invoices_raw": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "ItemMatch  - Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HandleVendor": {
+      "main": [
+        [
+          {
+            "node": "create payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create payload": {
+      "main": [
+        [
+          {
+            "node": "update ingestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update ingestion": {
+      "main": [
+        []
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "ingestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ingestions": {
+      "main": [
+        [
+          {
+            "node": "files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "files": {
+      "main": [
+        [
+          {
+            "node": "get zoho tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ItemMatch  - Candidates": {
+      "main": [
+        [
+          {
+            "node": "HandleVendor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b2b43a31-1b70-47b5-98fd-f3c2dbe70ac8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6879c4d326ba21d1ccb65b8539bd2e9444dca559b9181b34dd45567cb223f8c9"
+  },
+  "id": "sfWBZ0grs4biurxI",
+  "tags": []
+}
